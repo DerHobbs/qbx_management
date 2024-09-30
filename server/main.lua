@@ -102,34 +102,76 @@ lib.callback.register('qbx_management:server:hireEmployee', function(source, emp
     local player = exports.qbx_core:GetPlayer(source)
     local target = exports.qbx_core:GetPlayer(employee)
 
-    if not player.PlayerData[groupType].isboss then return end
-
-    if not target then
+    if not player or not target then
         exports.qbx_core:Notify(source, locale('error.not_around'), 'error')
         return
     end
 
-    local groupName = player.PlayerData[groupType].name
-    local logArea = groupType == 'gang' and 'Gang' or 'Boss'
+    if not player.PlayerData[groupType].isboss then return end
 
-    if groupType == 'job' then
-        local success, errorResult = exports.qbx_core:AddPlayerToJob(target.PlayerData.citizenid, groupName, 0)
-        assert(success, errorResult?.message)
-        success, errorResult = exports.qbx_core:SetPlayerPrimaryJob(target.PlayerData.citizenid, groupName)
-        assert(success, errorResult?.message)
-    else
-        local success, errorResult = exports.qbx_core:AddPlayerToGang(target.PlayerData.citizenid, groupName, 0)
-        assert(success, errorResult?.message)
-        success, errorResult = exports.qbx_core:SetPlayerPrimaryGang(target.PlayerData.citizenid, groupName)
-        assert(success, errorResult?.message)
+    local groupName = player.PlayerData[groupType].name
+    local groupLabel = player.PlayerData[groupType].label
+    local logArea = groupType == 'gang' and 'Gang' or 'Boss'
+    local targetFullName = target.PlayerData.charinfo.firstname .. ' ' .. target.PlayerData.charinfo.lastname
+
+    exports.qbx_core:Notify(source, locale('success.hired_into', targetFullName, groupLabel), 'success')
+
+    local confirmed = lib.callback.await('qbx_management:client:confirmHire', target.PlayerData.source, groupLabel)
+
+    if not confirmed then
+        exports.qbx_core:Notify(source, targetFullName .. locale('error.hire_declined', groupLabel), 'error')
+        exports.qbx_core:Notify(target.PlayerData.source, locale('error.you_declined_hire', groupLabel), 'error')
+        return
     end
 
-    local playerFullName = player.PlayerData.charinfo.firstname..' '..player.PlayerData.charinfo.lastname
-    local targetFullName = target.PlayerData.charinfo.firstname..' '..target.PlayerData.charinfo.lastname
+    exports.qbx_core:Notify(source, targetFullName .. locale('success.hired_to', groupLabel), 'success')
+    exports.qbx_core:Notify(target.PlayerData.source, locale('success.hired_to', groupLabel), 'success')
+
+    local success, errorResult
+
+    if groupType == 'job' then
+        success, errorResult = exports.qbx_core:AddPlayerToJob(target.PlayerData.citizenid, groupName, 0)
+        if not success then
+            local errorMsg = errorResult and errorResult.message or locale('error.job_add_fail')
+            exports.qbx_core:Notify(source, errorMsg, 'error')
+            lib.print.error(locale('error.job_add_fail'), errorMsg)
+            return
+        end
+
+        success, errorResult = exports.qbx_core:SetPlayerPrimaryJob(target.PlayerData.citizenid, groupName)
+        if not success then
+            local errorMsg = errorResult and errorResult.message or locale('error.primary_job_fail')
+            exports.qbx_core:Notify(source, errorMsg, 'error')
+            lib.print.error(locale('error.primary_job_fail'), errorMsg)
+            return
+        end
+    else
+        success, errorResult = exports.qbx_core:AddPlayerToGang(target.PlayerData.citizenid, groupName, 0)
+        if not success then
+            local errorMsg = errorResult and errorResult.message or locale('error.gang_add_fail')
+            exports.qbx_core:Notify(source, errorMsg, 'error')
+            lib.print.error(locale('error.gang_add_fail'), errorMsg)
+            return
+        end
+
+        success, errorResult = exports.qbx_core:SetPlayerPrimaryGang(target.PlayerData.citizenid, groupName)
+        if not success then
+            local errorMsg = errorResult and errorResult.message or locale('error.primary_gang_fail')
+            exports.qbx_core:Notify(source, errorMsg, 'error')
+            lib.print.error(locale('error.primary_gang_fail'), errorMsg)
+            return
+        end
+    end
+
+    local playerFullName = player.PlayerData.charinfo.firstname .. ' ' .. player.PlayerData.charinfo.lastname
     local organizationLabel = player.PlayerData[groupType].label
-    exports.qbx_core:Notify(source, locale('success.hired_into', targetFullName, organizationLabel), 'success')
-    exports.qbx_core:Notify(target.PlayerData.source, locale('success.hired_to')..organizationLabel, 'success')
-    logger.log({source = 'qbx_management', event = 'hireEmployee', message = string.format('%s | %s hired %s into %s at grade %s', logArea, playerFullName, targetFullName, organizationLabel, 0), webhook = config.discordWebhook})
+
+    logger.log({
+        source = 'qbx_management',
+        event = 'hireEmployee',
+        message = string.format('%s | %s hired %s into %s at grade %s', logArea, playerFullName, targetFullName, organizationLabel, 0),
+        webhook = config.discordWebhook
+    })
 end)
 
 -- Returns playerdata for a given table of player server ids.
