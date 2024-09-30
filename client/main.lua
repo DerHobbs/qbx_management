@@ -140,6 +140,21 @@ local function showHireMenu(groupType)
     lib.showContext('hireMenu')
 end
 
+-- Callback for the confirmation request for the setting with Ox Lib Alert dialog
+lib.callback.register('qbx_management:client:confirmHire', function(groupLabel)
+    local alert = lib.alertDialog({
+        header = locale('menu.confirm_hire'),
+        content = locale('menu.hire_confirmation', groupLabel),
+        centered = true,
+        cancel = true,
+        labels = {
+            confirm = locale('menu.confirm_contract'),
+            cancel = locale('menu.decline_contract')
+        }
+    })
+    return alert == 'confirm'
+end)
+
 -- Opens main boss menu changing function based on the group provided.
 ---@param groupType GroupType
 function OpenBossMenu(groupType)
